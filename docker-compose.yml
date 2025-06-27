@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: urlshortener_postgres
+    environment:
+      POSTGRES_DB: urlshortener
+      POSTGRES_USER: urlshortener
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U urlshortener -d urlshortener"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: urlshortener_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  urlshortener:
+    build: .
+    container_name: urlshortener_app
+    environment:
+      DATABASE_URL: postgres://urlshortener:password@postgres:5432/urlshortener?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      PORT: 8080
+      ENVIRONMENT: production
+      BASE_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data: 
